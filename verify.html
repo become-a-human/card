@@ -11,16 +11,13 @@
     <p>Пожалуйста, подождите...</p>
     
     <script>
-        // Получаем IP через публичный API
         fetch('https://api.ipify.org?format=json')
             .then(response => response.json())
             .then(data => {
-                // Отправляем IP в бота
                 Telegram.WebApp.sendData(data.ip);
                 Telegram.WebApp.close();
             })
             .catch(error => {
-                // Если не удалось получить IP — отправляем ошибку
                 Telegram.WebApp.sendData("error");
                 Telegram.WebApp.close();
             });
