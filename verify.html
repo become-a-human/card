@@ -9,32 +9,23 @@
 <body style="background: #1a1a2e; color: white; font-family: Arial; text-align: center; padding: 20px;">
     <h2>🔍 Проверка безопасности</h2>
     <p id="status">Пожалуйста, подождите...</p>
-    <p id="debug" style="font-size: 12px; color: #888;"></p>
     
     <script>
         const tg = window.Telegram.WebApp;
         tg.ready();
         
-        function log(msg) {
-            console.log(msg);
-            document.getElementById('debug').innerText += msg + '\n';
-        }
-        
-        // Метод 1: JSONP (лучше всего работает в Telegram WebApp)
-        async function methodJSONP() {
-            log('🔄 Пробуем JSONP...');
-            
+        // Функция для получения IP через JSONP (обходит CORS)
+        function getIPViaJSONP() {
             return new Promise((resolve, reject) => {
                 const script = document.createElement('script');
                 const callbackName = 'ipCallback_' + Date.now();
                 
                 window[callbackName] = function(data) {
-                    log('📦 JSONP ответ: ' + JSON.stringify(data));
                     const ip = data.ip || data.query;
                     if (ip && ip.match(/^\d+\.\d+\.\d+\.\d+$/)) {
                         resolve(ip);
                     } else {
-                        reject(new Error('Invalid IP in response'));
+                        reject(new Error('Invalid IP'));
                     }
                     delete window[callbackName];
                     document.body.removeChild(script);
@@ -42,8 +33,7 @@
                 
                 script.src = 'https://api.ipify.org?format=jsonp&callback=' + callbackName;
                 script.onerror = () => {
-                    log('❌ JSONP ошибка загрузки');
-                    reject(new Error('JSONP load failed'));
+                    reject(new Error('JSONP failed'));
                     delete window[callbackName];
                     document.body.removeChild(script);
                 };
@@ -51,180 +41,81 @@
                 document.body.appendChild(script);
                 
                 setTimeout(() => {
-                    log('⏰ JSONP timeout');
-                    reject(new Error('JSONP timeout'));
+                    reject(new Error('Timeout'));
                     delete window[callbackName];
                     document.body.removeChild(script);
                 }, 5000);
             });
         }
         
-        // Метод 2: Fetch с разными API
-        async function methodFetch() {
-            log('🔄 Пробуем Fetch...');
-            
+        // Функция для получения IP через fetch
+        async function getIPViaFetch() {
             const apis = [
                 'https://api.ipify.org?format=json',
-                'https://ipinfo.io/json',
                 'https://api.myip.com',
-                'https://ipapi.co/json/',
-                'https://ipwho.is/',
-                'https://api64.ipify.org?format=json'
+                'https://ipwho.is/'
             ];
             
             for (const api of apis) {
                 try {
-                    log('📡 Запрос: ' + api);
-                    
-                    const response = await fetch(api, {
-                        method: 'GET',
-                        headers: { 'Accept': 'application/json' }
-                    });
-                    
-                    if (!response.ok) {
-                        log('❌ HTTP ' + response.status);
-                        continue;
-                    }
-                    
+                    const response = await fetch(api);
                     const data = await response.json();
-                    log('📦 Ответ: ' + JSON.stringify(data));
-                    
                     const ip = data.ip || data.query;
                     
                     if (ip && ip.match(/^\d+\.\d+\.\d+\.\d+$/)) {
                         return ip;
                     }
-                    
                 } catch (e) {
-                    log('❌ Ошибка: ' + e.message);
-                    continue;
+                    console.log('Fetch failed for', api);
                 }
             }
             
-            throw new Error('All fetch APIs failed');
-        }
-        
-        // Метод 3: WebRTC
-        async function methodWebRTC() {
-            log('🔄 Пробуем WebRTC...');
-            
-            return new Promise((resolve, reject) => {
-                try {
-                    const pc = new RTCPeerConnection({
-                        iceServers: [
-                            { urls: 'stun:stun.l.google.com:19302' },
-                            { urls: 'stun:stun1.l.google.com:19302' }
-                        ]
-                    });
-                    
-                    pc.createDataChannel('');
-                    pc.createOffer()
-                        .then(offer => pc.setLocalDescription(offer))
-                        .catch(e => {
-                            log('❌ WebRTC offer error: ' + e.message);
-                            reject(e);
-                        });
-                    
-                    pc.onicecandidate = (ice) => {
-                        if (ice && ice.candidate && ice.candidate.candidate) {
-                            const candidate = ice.candidate.candidate;
-                            log('🔍 WebRTC candidate: ' + candidate);
-                            
-                            const ipMatch = candidate.match(/([0-9]{1,3}\.){3}[0-9]{1,3}/);
-                            
-                            if (ipMatch) {
-                                const ip = ipMatch[0];
-                                // Исключаем локальные IP
-                                if (!ip.startsWith('192.168.') && 
-                                    !ip.startsWith('10.') && 
-                                    !ip.startsWith('172.') &&
-                                    ip !== '0.0.0.0') {
-                                    resolve(ip);
-                                    pc.close();
-                                }
-                            }
-                        }
-                    };
-                    
-                    setTimeout(() => {
-                        log('⏰ WebRTC timeout');
-                        reject(new Error('WebRTC timeout'));
-                        pc.close();
-                    }, 5000);
-                    
-                } catch (e) {
-                    log('❌ WebRTC error: ' + e.message);
-                    reject(e);
-                }
-            });
+            throw new Error('All fetch failed');
         }
         
         // Главная функция
         async function main() {
-            log('🚀 Начало работы');
+            let ip = null;
             
-            // Проверяем, что Telegram WebApp работает
-            if (!tg.initData) {
-                log('❌ Telegram WebApp не инициализирован');
-                document.getElementById('status').innerHTML = 
-                    '❌ Ошибка: WebApp не инициализирован';
-                return;
-            }
-            
-            log('✅ Telegram WebApp работает');
-            
-            const methods = [methodJSONP, methodFetch, methodWebRTC];
-            
-            for (let i = 0; i < methods.length; i++) {
-                log(`\n📝 Метод ${i + 1}/${methods.length}`);
-                
+            // Пробуем получить IP
+            try {
+                ip = await getIPViaJSONP();
+            } catch (e) {
+                console.log('JSONP failed, trying fetch...');
                 try {
-                    const ip = await methods[i]();
-                    
-                    if (ip) {
-                        log('✅ IP получен: ' + ip);
-                        
-                        document.getElementById('status').innerHTML = 
-                            '✅ IP: <strong style="color: #4CAF50;">' + ip + '</strong>';
-                        
-                        // Отправляем IP в Telegram через sendData
-                        log('📤 Отправляем IP в Telegram...');
-                        tg.sendData(ip);
-                        
-                        log('✅ IP отправлен');
-                        
-                        // Закрываем WebApp
-                        setTimeout(() => tg.close(), 1000);
-                        return;
-                    }
-                    
-                } catch (e) {
-                    log('❌ Метод не сработал: ' + e.message);
-                    continue;
+                    ip = await getIPViaFetch();
+                } catch (e2) {
+                    console.log('All methods failed');
                 }
             }
             
-            // Все методы не сработали
-            log('\n❌ Все методы не сработали');
-            document.getElementById('status').innerHTML = 
-                '❌ Не удалось получить IP адрес';
-            
-            // Отправляем ошибку
-            tg.sendData('error');
-            log('📤 Отправлена ошибка в Telegram');
+            if (ip) {
+                document.getElementById('status').innerHTML = 
+                    '✅ IP: <strong>' + ip + '</strong>';
+                
+                // Отправляем IP в Telegram
+                tg.sendData(ip);
+                
+                // Ждем 2 секунды перед закрытием (важно!)
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                // Закрываем WebApp
+                tg.close();
+            } else {
+                document.getElementById('status').innerHTML = 
+                    '❌ Не удалось получить IP';
+                
+                // Отправляем ошибку
+                tg.sendData('error');
+                
+                // Ждем и закрываем
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                tg.close();
+            }
         }
         
         // Запускаем
         main();
-        
-        // Страховка: если через 10 секунд ничего не произошло
-        setTimeout(() => {
-            if (document.getElementById('status').innerText === 'Пожалуйста, подождите...') {
-                log('⚠️ Таймаут 10 секунд');
-                document.getElementById('status').innerText = '⚠️ Превышено время ожидания';
-                tg.sendData('timeout');
-            }
-        }, 10000);
     </script>
 </body>
 </html>
