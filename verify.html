@@ -5,137 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Проверка</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <style>
-        body {
-            background: #1a1a2e;
-            color: #fff;
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 20px;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-        #log {
-            background: #0d0d1a;
-            border: 1px solid #333;
-            border-radius: 10px;
-            padding: 15px;
-            margin-top: 20px;
-            text-align: left;
-            font-size: 14px;
-            font-family: monospace;
-            width: 100%;
-            max-width: 500px;
-            min-height: 200px;
-            white-space: pre-wrap;
-            word-break: break-all;
-        }
-        .log-entry {
-            margin: 5px 0;
-            color: #FFB6C1;
-        }
-        .log-success {
-            color: #90EE90;
-        }
-        .log-error {
-            color: #FF6B6B;
-        }
-        .log-info {
-            color: #87CEEB;
-        }
-        button {
-            background: #FF69B4;
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            font-size: 18px;
-            border-radius: 10px;
-            cursor: pointer;
-            margin: 10px;
-        }
-        button:active {
-            background: #C71585;
-        }
-        #send-btn {
-            display: none;
-        }
-    </style>
 </head>
 <body>
-    <h2>🔍 Проверка безопасности</h2>
-    <p>Нажмите кнопку для получения IP</p>
-    
-    <button id="get-ip-btn" onclick="getIP()">Получить IP</button>
-    <button id="send-btn" onclick="sendIP()">Отправить IP боту</button>
-    
-    <div id="log"></div>
+    <h2>🔍 Проверка</h2>
+    <p id="status">Получение IP...</p>
     
     <script>
-        var currentIP = null;
-        var logElement = document.getElementById('log');
+        Telegram.WebApp.ready();
+        document.getElementById('status').innerText = 'WebApp готов';
         
-        function addLog(message, type) {
-            var entry = document.createElement('div');
-            entry.className = 'log-entry ' + (type || 'log-info');
-            entry.textContent = '[' + new Date().toLocaleTimeString() + '] ' + message;
-            logElement.appendChild(entry);
-            logElement.scrollTop = logElement.scrollHeight;
-        }
-        
-        function getIP() {
-            addLog('Начинаю получение IP...', 'log-info');
-            document.getElementById('get-ip-btn').disabled = true;
-            
-            fetch('https://api.ipify.org?format=json')
-                .then(response => {
-                    addLog('Ответ от ipify: ' + response.status, 'log-info');
-                    return response.json();
-                })
-                .then(data => {
-                    currentIP = data.ip;
-                    addLog('IP получен: ' + currentIP, 'log-success');
-                    document.getElementById('send-btn').style.display = 'inline-block';
-                    document.getElementById('get-ip-btn').style.display = 'none';
-                })
-                .catch(error => {
-                    addLog('Ошибка получения IP: ' + error.message, 'log-error');
-                    document.getElementById('get-ip-btn').disabled = false;
-                });
-        }
-        
-        function sendIP() {
-            if (!currentIP) {
-                addLog('Нет IP для отправки', 'log-error');
-                return;
-            }
-            
-            addLog('Отправляю IP боту: ' + currentIP, 'log-info');
-            
-            try {
-                Telegram.WebApp.sendData(currentIP);
-                addLog('Данные отправлены!', 'log-success');
+        fetch('https://api.ipify.org?format=json')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('status').innerText = 'IP: ' + data.ip;
                 
-                setTimeout(function() {
-                    addLog('Закрываю WebApp...', 'log-info');
+                // Отправляем
+                Telegram.WebApp.sendData(data.ip);
+                document.getElementById('status').innerText += '\nОтправлено!';
+                
+                setTimeout(() => {
                     Telegram.WebApp.close();
                 }, 1000);
-            } catch (error) {
-                addLog('Ошибка отправки: ' + error.message, 'log-error');
-            }
-        }
-        
-        // Инициализация
-        try {
-            Telegram.WebApp.ready();
-            addLog('Telegram WebApp готов', 'log-success');
-            addLog('Версия WebApp: ' + Telegram.WebApp.version, 'log-info');
-            addLog('Пользователь: ' + (Telegram.WebApp.initDataUnsafe?.user?.username || 'неизвестно'), 'log-info');
-        } catch (error) {
-            addLog('Ошибка инициализации: ' + error.message, 'log-error');
-        }
+            })
+            .catch(e => {
+                document.getElementById('status').innerText = 'Ошибка: ' + e.message;
+                Telegram.WebApp.sendData('error');
+                Telegram.WebApp.close();
+            });
     </script>
 </body>
 </html>
