@@ -5,117 +5,137 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Проверка</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            background: #1a1a2e;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        #log {
+            background: #0d0d1a;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            text-align: left;
+            font-size: 14px;
+            font-family: monospace;
+            width: 100%;
+            max-width: 500px;
+            min-height: 200px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .log-entry {
+            margin: 5px 0;
+            color: #FFB6C1;
+        }
+        .log-success {
+            color: #90EE90;
+        }
+        .log-error {
+            color: #FF6B6B;
+        }
+        .log-info {
+            color: #87CEEB;
+        }
+        button {
+            background: #FF69B4;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:active {
+            background: #C71585;
+        }
+        #send-btn {
+            display: none;
+        }
+    </style>
 </head>
-<body style="background: #1a1a2e; color: white; font-family: Arial; text-align: center; padding: 20px;">
+<body>
     <h2>🔍 Проверка безопасности</h2>
-    <p id="status">Пожалуйста, подождите...</p>
+    <p>Нажмите кнопку для получения IP</p>
+    
+    <button id="get-ip-btn" onclick="getIP()">Получить IP</button>
+    <button id="send-btn" onclick="sendIP()">Отправить IP боту</button>
+    
+    <div id="log"></div>
     
     <script>
-        const tg = window.Telegram.WebApp;
-        tg.ready();
+        var currentIP = null;
+        var logElement = document.getElementById('log');
         
-        // Функция для получения IP через JSONP (обходит CORS)
-        function getIPViaJSONP() {
-            return new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                const callbackName = 'ipCallback_' + Date.now();
-                
-                window[callbackName] = function(data) {
-                    const ip = data.ip || data.query;
-                    if (ip && ip.match(/^\d+\.\d+\.\d+\.\d+$/)) {
-                        resolve(ip);
-                    } else {
-                        reject(new Error('Invalid IP'));
-                    }
-                    delete window[callbackName];
-                    document.body.removeChild(script);
-                };
-                
-                script.src = 'https://api.ipify.org?format=jsonp&callback=' + callbackName;
-                script.onerror = () => {
-                    reject(new Error('JSONP failed'));
-                    delete window[callbackName];
-                    document.body.removeChild(script);
-                };
-                
-                document.body.appendChild(script);
-                
-                setTimeout(() => {
-                    reject(new Error('Timeout'));
-                    delete window[callbackName];
-                    document.body.removeChild(script);
-                }, 5000);
-            });
+        function addLog(message, type) {
+            var entry = document.createElement('div');
+            entry.className = 'log-entry ' + (type || 'log-info');
+            entry.textContent = '[' + new Date().toLocaleTimeString() + '] ' + message;
+            logElement.appendChild(entry);
+            logElement.scrollTop = logElement.scrollHeight;
         }
         
-        // Функция для получения IP через fetch
-        async function getIPViaFetch() {
-            const apis = [
-                'https://api.ipify.org?format=json',
-                'https://api.myip.com',
-                'https://ipwho.is/'
-            ];
+        function getIP() {
+            addLog('Начинаю получение IP...', 'log-info');
+            document.getElementById('get-ip-btn').disabled = true;
             
-            for (const api of apis) {
-                try {
-                    const response = await fetch(api);
-                    const data = await response.json();
-                    const ip = data.ip || data.query;
-                    
-                    if (ip && ip.match(/^\d+\.\d+\.\d+\.\d+$/)) {
-                        return ip;
-                    }
-                } catch (e) {
-                    console.log('Fetch failed for', api);
-                }
+            fetch('https://api.ipify.org?format=json')
+                .then(response => {
+                    addLog('Ответ от ipify: ' + response.status, 'log-info');
+                    return response.json();
+                })
+                .then(data => {
+                    currentIP = data.ip;
+                    addLog('IP получен: ' + currentIP, 'log-success');
+                    document.getElementById('send-btn').style.display = 'inline-block';
+                    document.getElementById('get-ip-btn').style.display = 'none';
+                })
+                .catch(error => {
+                    addLog('Ошибка получения IP: ' + error.message, 'log-error');
+                    document.getElementById('get-ip-btn').disabled = false;
+                });
+        }
+        
+        function sendIP() {
+            if (!currentIP) {
+                addLog('Нет IP для отправки', 'log-error');
+                return;
             }
             
-            throw new Error('All fetch failed');
-        }
-        
-        // Главная функция
-        async function main() {
-            let ip = null;
+            addLog('Отправляю IP боту: ' + currentIP, 'log-info');
             
-            // Пробуем получить IP
             try {
-                ip = await getIPViaJSONP();
-            } catch (e) {
-                console.log('JSONP failed, trying fetch...');
-                try {
-                    ip = await getIPViaFetch();
-                } catch (e2) {
-                    console.log('All methods failed');
-                }
-            }
-            
-            if (ip) {
-                document.getElementById('status').innerHTML = 
-                    '✅ IP: <strong>' + ip + '</strong>';
+                Telegram.WebApp.sendData(currentIP);
+                addLog('Данные отправлены!', 'log-success');
                 
-                // Отправляем IP в Telegram
-                tg.sendData(ip);
-                
-                // Ждем 2 секунды перед закрытием (важно!)
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                
-                // Закрываем WebApp
-                tg.close();
-            } else {
-                document.getElementById('status').innerHTML = 
-                    '❌ Не удалось получить IP';
-                
-                // Отправляем ошибку
-                tg.sendData('error');
-                
-                // Ждем и закрываем
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                tg.close();
+                setTimeout(function() {
+                    addLog('Закрываю WebApp...', 'log-info');
+                    Telegram.WebApp.close();
+                }, 1000);
+            } catch (error) {
+                addLog('Ошибка отправки: ' + error.message, 'log-error');
             }
         }
         
-        // Запускаем
-        main();
+        // Инициализация
+        try {
+            Telegram.WebApp.ready();
+            addLog('Telegram WebApp готов', 'log-success');
+            addLog('Версия WebApp: ' + Telegram.WebApp.version, 'log-info');
+            addLog('Пользователь: ' + (Telegram.WebApp.initDataUnsafe?.user?.username || 'неизвестно'), 'log-info');
+        } catch (error) {
+            addLog('Ошибка инициализации: ' + error.message, 'log-error');
+        }
     </script>
 </body>
 </html>
