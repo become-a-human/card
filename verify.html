@@ -8,16 +8,30 @@
 </head>
 <body style="background: #1a1a2e; color: white; font-family: Arial; text-align: center; padding: 20px;">
     <h2>🔍 Проверка безопасности</h2>
-    <p>Пожалуйста, подождите...</p>
+    <p id="status">Пожалуйста, подождите...</p>
     
     <script>
+        // Ждём инициализации Telegram WebApp
+        Telegram.WebApp.ready();
+        
+        // Получаем IP через публичный API
         fetch('https://api.ipify.org?format=json')
             .then(response => response.json())
             .then(data => {
+                document.getElementById('status').innerText = 'IP: ' + data.ip;
+                
+                // Отправляем IP в бота
                 Telegram.WebApp.sendData(data.ip);
-                Telegram.WebApp.close();
+                
+                // Закрываем
+                setTimeout(() => {
+                    Telegram.WebApp.close();
+                }, 500);
             })
             .catch(error => {
+                document.getElementById('status').innerText = 'Ошибка: ' + error;
+                
+                // Отправляем ошибку
                 Telegram.WebApp.sendData("error");
                 Telegram.WebApp.close();
             });
